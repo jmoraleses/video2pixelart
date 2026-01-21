@@ -75,7 +75,7 @@ El proyecto consta de dos partes principales:
 
 *   La primera vez que ejecutes la aplicación, el modelo de IA se descargará automáticamente, lo cual puede tardar unos minutos dependiendo de tu conexión. Las siguientes ejecuciones serán mucho más rápidas.
 
-## Screenshot
+## Screenshots
 ![Screen1](Screenshot1.png)
 ![Screen1](Screenshot2.png)
 ![Screen1](Screenshot3.png)
