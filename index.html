@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video to Pixel Art</title>
+    <meta name="description" content="Convierte videos e imágenes a pixel art con control total">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <h1 id="appTitle">🎮 Video to Pixel Art</h1>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Preview Area -->
+            <section class="preview-section">
+                <!-- Drop Zone (shown when no content) -->
+                <div class="drop-zone" id="dropZone">
+                    <div class="drop-content">
+                        <span class="drop-icon">🎬</span>
+                        <p>Arrastra un video o imagen aquí</p>
+                        <span class="drop-hint">o haz clic para seleccionar</span>
+                    </div>
+                    <input type="file" id="fileInput" accept="video/*,image/*" multiple hidden>
+                </div>
+
+                <!-- File List (New) -->
+                <div class="file-list-container" id="fileListContainer" style="display: none;">
+                    <h3>📂 Archivos Seleccionados</h3>
+                    <div class="file-list" id="fileList"></div>
+                    <button class="btn btn-secondary btn-small" id="addMoreBtn" style="margin-top: 10px;">+ Añadir
+                        más</button>
+                </div>
+
+                <!-- Preview Canvas (shown when content loaded) -->
+                <div class="preview-wrapper" id="previewWrapper" style="display: none;">
+                    <canvas id="previewCanvas"></canvas>
+                </div>
+
+                <!-- Hidden source elements -->
+                <video id="sourceVideo" style="display: none;"></video>
+                <img id="sourceImage" style="display: none;">
+            </section>
+
+            <!-- Controls Bar -->
+            <section class="controls-bar" id="controlsBar" style="display: none;">
+                <!-- Timeline Previews -->
+                <div class="timeline-previews" id="timelinePreviews">
+                    <div class="preview-item">
+                        <canvas id="previewStartFrame" width="100" height="75"></canvas>
+                        <span>Start</span>
+                    </div>
+                    <div class="preview-item right">
+                        <canvas id="previewEndFrame" width="100" height="75"></canvas>
+                        <span>End</span>
+                    </div>
+                </div>
+
+                <!-- Video Scrubber -->
+                <div class="scrubber-container" id="scrubberContainer">
+                    <div class="trim-controls">
+                        <button class="btn-icon-small" id="setInPointBtn" title="Marcar Inicio">[</button>
+                        <button class="btn-icon-small" id="setOutPointBtn" title="Marcar Final">]</button>
+                    </div>
+                    <div class="scrubber-wrapper" id="scrubberWrapper">
+                        <div class="trim-highlight" id="trimHighlight"></div>
+                        <div class="trim-handle header" id="trimHandleStart"></div>
+                        <div class="trim-handle footer" id="trimHandleEnd"></div>
+                        <input type="range" id="videoScrubber" min="0" max="100" value="0" class="scrubber">
+                    </div>
+                    <button class="btn-icon-small" id="resetTrimBtn" title="Resetear Rango">↺</button>
+                    <span class="time-display" id="timeDisplay">0:00 / 0:00</span>
+                </div>
+
+                <!-- Main Controls -->
+                <div class="controls-row">
+                    <div class="control-item">
+                        <label>Block Size</label>
+                        <div class="control-input">
+                            <input type="range" id="blockSize" min="1" max="50" value="50">
+                            <span id="blockSizeValue">50</span>
+                        </div>
+                    </div>
+
+                    <div class="control-item">
+                        <label>FPS</label>
+                        <div class="control-input">
+                            <input type="range" id="extractionFps" min="1" max="30" value="12">
+                            <span id="fpsValue">12</span>
+                        </div>
+                    </div>
+                    <!-- AI Controls Group (Right Aligned) -->
+
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button class="btn btn-secondary" id="captureOneBtn">
+                        📷 Capturar Frame
+                    </button>
+                    <button class="btn btn-primary" id="captureAllBtn">
+                        🎞️ Extraer Todos
+                    </button>
+                    <button class="btn btn-danger" id="clearBtn" title="Limpiar Todo">
+                        🗑️
+                    </button>
+                </div>
+
+
+            </section>
+
+            <!-- Frame Strip -->
+            <section class="frame-strip" id="frameStrip" style="display: none;">
+                <div class="strip-header">
+                    <span class="frame-count"><span id="selectedCount">0</span> / <span id="totalCount">0</span>
+                        frames</span>
+                    <div class="strip-actions">
+                        <button class="btn-small" id="selectAllBtn">Todos</button>
+                        <button class="btn-small" id="deselectAllBtn">Ninguno</button>
+
+                        <!-- AI Controls moved here -->
+                        <div class="ai-controls-wrapper"
+                            style="display: flex; align-items: center; gap: 1rem; border-left: 1px solid var(--border); padding-left: 1rem; margin-left: 0.5rem;">
+                            <button class="btn-small" id="applyAiToSelectedBtn"
+                                title="Aplicar Fondo/AI a las capturas seleccionadas" style="display: none;">
+                                🪄 Aplicar
+                            </button>
+
+                            <!-- Tolerance -->
+                            <div class="control-item" id="aiToleranceGroup"
+                                style="display: none; opacity: 0; transition: opacity 0.3s;">
+                                <label style="font-size: 0.8rem;">Tol</label>
+                                <div class="control-input">
+                                    <input type="range" id="aiTolerance" min="10" max="500" value="485"
+                                        style="width: 60px;">
+                                    <span id="aiToleranceValue" style="font-size: 0.8rem; min-width: 25px;">485</span>
+                                </div>
+                            </div>
+
+                            <!-- Styled AI Toggle -->
+                            <div class="control-item control-toggle">
+                                <label for="useAiToggle"
+                                    style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.8rem;">
+                                    Quitar Fondo
+                                    <input type="checkbox" id="useAiToggle">
+                                    <div class="toggle-switch" style="width: 30px; height: 18px;"></div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Progress (Moved here) -->
+                        <div class="progress-container" id="progressContainer"
+                            style="display: none; margin-left: 1rem; align-items: center; gap: 10px;">
+                            <div class="progress-bar-wrapper" style="width: 150px;">
+                                <div class="progress-bar" style="height: 6px;">
+                                    <div class="progress-fill" id="progressFill"></div>
+                                </div>
+                                <span id="progressText"
+                                    style="font-size: 0.7rem; white-space: nowrap;">Procesando...</span>
+                            </div>
+                            <button class="btn-icon-small btn-stop-progress" id="stopProgressBtn" title="Detener"
+                                style="width: 20px; height: 20px; font-size: 0.8rem;">🛑</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="strip-frames" id="stripFrames">
+                    <!-- Frames will be added here -->
+                </div>
+                <div class="strip-progress">
+                    <div class="strip-progress-fill" id="stripProgressFill"></div>
+                </div>
+            </section>
+
+            <!-- Animation Controls -->
+            <section class="animation-controls" id="animationControls" style="display: none;">
+                <button class="btn-play" id="playPauseBtn">▶️</button>
+                <div class="speed-control">
+                    <label>Speed:</label>
+                    <input type="range" id="animationSpeed" min="1" max="30" value="8">
+                    <span id="animationSpeedValue">8 FPS</span>
+                </div>
+            </section>
+
+            <!-- Export Section -->
+            <section class="export-section" id="exportSection" style="display: none;">
+                <div class="export-options">
+
+                    <div class="control-item">
+                        <label>Sprite</label>
+                        <select id="spriteFormat">
+                            <option value="horizontal">Horizontal</option>
+                            <option value="vertical">Vertical</option>
+                            <option value="grid" selected>Cuadrícula</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="export-buttons">
+                    <button class="btn btn-export" id="exportGifBtn">
+                        🎞️ Generar GIF
+                    </button>
+                    <button class="btn btn-export" id="exportSpriteBtn">
+                        🎨 Generar Sprite
+                    </button>
+                    <button class="btn btn-export" id="exportVideoBtn">
+                        🎥 Generar MP4
+                    </button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Sprite Preview Modal -->
+    <div class="modal" id="spritePreviewModal">
+        <div class="modal-box preview-box">
+            <div class="modal-header">
+                <h2 id="modalTitle">Sprite Preview</h2>
+                <button class="modal-close" id="modalClose">✕</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Main Preview Canvas -->
+                <div class="sprite-preview-container">
+                    <canvas id="spritePreviewCanvas"></canvas>
+                </div>
+
+                <!-- Preview Controls (Speed & Playback) -->
+                <div class="modal-controls"
+                    style="display: flex; justify-content: space-between; align-items: center; padding: 1rem;">
+
+                    <!-- Left: Speed -->
+                    <div class="control-group" style="display: flex; align-items: center; gap: 0.75rem;">
+                        <label style="font-size: 1rem;">Speed:</label>
+                        <button class="btn-icon" id="speedDownBtn"
+                            style="width: 40px; height: 40px; font-size: 1.2rem;">➖</button>
+                        <span class="value-display" id="previewSpeedValue"
+                            style="font-size: 1rem; min-width: 70px; text-align: center;">12 FPS</span>
+                        <button class="btn-icon" id="speedUpBtn"
+                            style="width: 40px; height: 40px; font-size: 1.2rem;">➕</button>
+                    </div>
+
+                    <!-- Right: Playback (Hidden per request) -->
+                    <div class="playback-controls" style="display: none; gap: 0.75rem;">
+                        <button class="btn-icon-large" id="prevFrameBtn"
+                            style="width: 50px; height: 50px; font-size: 1.5rem;">⏮</button>
+                        <button class="btn-icon-large" id="previewPlayPauseBtn"
+                            style="width: 50px; height: 50px; font-size: 1.5rem;">⏯</button>
+                        <button class="btn-icon-large" id="nextFrameBtn"
+                            style="width: 50px; height: 50px; font-size: 1.5rem;">⏭</button>
+                    </div>
+                </div>
+
+                <!-- Zoom removed -->
+            </div>
+
+            <!-- Frame Strip (Hidden per request) -->
+            <div class="preview-strip" style="display: none;">
+                <div class="preview-strip-inner" id="previewStrip">
+                    <!-- Thumbnails injected here -->
+                </div>
+            </div>
+
+            <div class="preview-footer-text">
+                Export all captured frames as a single sprite sheet.
+            </div>
+
+            <!-- Download Button (inside modal-box) -->
+            <div class="modal-footer"
+                style="padding: 1rem; display: flex; justify-content: center; border-top: 1px solid var(--border);">
+                <button class="btn btn-primary" id="downloadSpriteBtn"
+                    style="padding: 0.75rem 2.5rem; font-size: 1rem;">
+                    Download Sprite Sheet (PNG)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Background Editor Modal -->
+    <div class="modal" id="bgEditorModal">
+        <div class="modal-box bg-editor-box">
+            <div class="modal-header">
+                <h2>Editar Fondo / Transparencia</h2>
+                <button class="modal-close" id="bgEditorClose">✕</button>
+            </div>
+
+            <div class="modal-body bg-editor-body">
+                <div class="bg-editor-toolbar">
+                    <div class="toolbar-group">
+                        <label>Modo:</label>
+                        <div class="mode-switch">
+                            <button class="btn-mode active" id="modeRemoveBtn" title="Lo que selecciones se BORRA">
+                                ⛔ Borrar Selección
+                            </button>
+                            <button class="btn-mode" id="modeKeepBtn"
+                                title="Lo que selecciones se MANTIENE (borra el resto)">
+                                ✅ Mantener Selección
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="toolbar-group">
+                        <label>Tolerancia</label>
+                        <input type="range" id="bgEditorTolerance" min="0" max="100" value="30">
+                        <span id="bgEditorToleranceValue">30</span>
+                    </div>
+
+                    <div class="toolbar-actions">
+                        <button class="btn-small" id="bgEditorUndoBtn" disabled>↩ Deshacer</button>
+                        <button class="btn-small" id="bgEditorClearBtn">Limpiar Todo</button>
+                    </div>
+                </div>
+
+                <div class="bg-editor-canvas-wrapper">
+                    <canvas id="bgEditorCanvas"></canvas>
+                    <div class="canvas-hint">👆 Arrastra sobre la imagen para seleccionar colores</div>
+                </div>
+
+                <div class="selected-colors-list compact" id="bgEditorColorsList"></div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="bgEditorCancelBtn">Cancelar</button>
+                <button class="btn btn-primary" id="bgEditorApplyBtn">Aplicar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Processing Elements -->
+    <div style="display: none;">
+        <img id="pixelitImg">
+        <canvas id="pixelitCanvas"></canvas>
+    </div>
+
+    <!-- Scripts -->
+    <script src="pixelit.js"></script>
+    <script src="gif.js"></script>
+    <script src="mp4-muxer.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
