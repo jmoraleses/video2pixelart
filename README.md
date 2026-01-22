@@ -74,3 +74,9 @@ El proyecto consta de dos partes principales:
 ## 📝 Notas
 
 *   La primera vez que ejecutes la aplicación, el modelo de IA se descargará automáticamente, lo cual puede tardar unos minutos dependiendo de tu conexión. Las siguientes ejecuciones serán mucho más rápidas.
+
+## Screenshots
+
+![Extract frames](screenshots/screen1.png)
+![Remove background](screenshots/screen2.png)
+![Create sprite](screenshots/screen3.png)
