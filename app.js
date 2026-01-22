@@ -1079,6 +1079,11 @@ async function captureAll() {
 
     let totalExtractedAny = 0;
 
+    // Capture current trim settings before loop, as loading videos will reset state
+    const preservedTrimStart = state.trimStart;
+    const preservedTrimEnd = state.trimEnd;
+    const preservedCurrentIndex = state.currentFileIndex;
+
     try {
         console.log(`🚀 Starting capture of ${state.sourceFiles.length} files...`);
         for (let fIndex = 0; fIndex < state.sourceFiles.length; fIndex++) {
@@ -1102,11 +1107,13 @@ async function captureAll() {
                 let startT = 0;
                 let endT = video.duration;
 
-                if (fIndex === state.currentFileIndex && state.userManuallyTrimmed) {
-                    startT = state.trimStart;
-                    endT = state.trimEnd > 0 ? state.trimEnd : video.duration;
+                if (fIndex === preservedCurrentIndex) {
+                    // Use preserved values for the current file
+                    startT = preservedTrimStart;
+                    // Ensure trimEnd is valid
+                    endT = preservedTrimEnd > 0 ? preservedTrimEnd : video.duration;
                 } else {
-                    // Force full duration if not manual trim or processing batch files (defaults)
+                    // Force full duration for other files
                     startT = 0;
                     endT = video.duration;
                 }
