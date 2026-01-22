@@ -135,6 +135,14 @@
                                 title="Aplicar Fondo/AI a las capturas seleccionadas" style="display: none;">
                                 🪄 Aplicar
                             </button>
+                            <button class="btn-small" id="upscaleSelectedBtn" title="Escalar 2k (Swin2SR Real-World)"
+                                style="display: none;">
+                                🔍 Upscale 2k
+                            </button>
+                            <button class="btn-small" id="upscale768Btn"
+                                title="Escalar a 768px de altura (proporcional)" style="display: none;">
+                                📏 768px
+                            </button>
 
                             <!-- Tolerance -->
                             <div class="control-item" id="aiToleranceGroup"
@@ -158,20 +166,19 @@
                             </div>
                         </div>
 
-                        <!-- Progress (Moved here) -->
-                        <div class="progress-container" id="progressContainer"
-                            style="display: none; margin-left: 1rem; align-items: center; gap: 10px;">
-                            <div class="progress-bar-wrapper" style="width: 150px;">
-                                <div class="progress-bar" style="height: 6px;">
-                                    <div class="progress-fill" id="progressFill"></div>
-                                </div>
-                                <span id="progressText"
-                                    style="font-size: 0.7rem; white-space: nowrap;">Procesando...</span>
-                            </div>
-                            <button class="btn-icon-small btn-stop-progress" id="stopProgressBtn" title="Detener"
-                                style="width: 20px; height: 20px; font-size: 0.8rem;">🛑</button>
-                        </div>
                     </div>
+                </div>
+                <!-- Progress (Moved to new line) -->
+                <div class="progress-container" id="progressContainer"
+                    style="display: none; margin-bottom: 10px; align-items: center; gap: 10px; width: 100%;">
+                    <div class="progress-bar-wrapper" style="flex: 1;">
+                        <div class="progress-bar" style="height: 6px;">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <span id="progressText" style="font-size: 0.7rem; white-space: nowrap;">Procesando...</span>
+                    </div>
+                    <button class="btn-icon-small btn-stop-progress" id="stopProgressBtn" title="Detener"
+                        style="width: 20px; height: 20px; font-size: 0.8rem;">🛑</button>
                 </div>
                 <div class="strip-frames" id="stripFrames">
                     <!-- Frames will be added here -->
@@ -186,8 +193,8 @@
                 <button class="btn-play" id="playPauseBtn">▶️</button>
                 <div class="speed-control">
                     <label>Speed:</label>
-                    <input type="range" id="animationSpeed" min="1" max="30" value="8">
-                    <span id="animationSpeedValue">8 FPS</span>
+                    <input type="range" id="animationSpeed" min="1" max="30" value="12">
+                    <span id="animationSpeedValue">12 FPS</span>
                 </div>
             </section>
 

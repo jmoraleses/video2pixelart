@@ -7,7 +7,7 @@ const CONFIG = {
     defaultBlockSize: 50,
     defaultFps: 12,
     defaultTolerance: 30,
-    maxFrames: 300
+    maxFrames: 5000
 };
 
 // Inline worker script to allow running via file:// protocol without local server
@@ -49,7 +49,8 @@ const state = {
     previewZoom: 1.0,
     isBgRemovalCanceled: false, // Flag for cancellation
     trimStart: 0,
-    trimEnd: 0 // 0 means full duration
+    trimEnd: 0, // 0 means full duration
+    userManuallyTrimmed: false // Track if user explicitly changed trim
 };
 
 // ===== Elements =====
@@ -99,6 +100,8 @@ function initElements() {
     el.setOutPointBtn = document.getElementById('setOutPointBtn');
     el.resetTrimBtn = document.getElementById('resetTrimBtn');
     el.applyAiToSelectedBtn = document.getElementById('applyAiToSelectedBtn');
+    el.upscaleSelectedBtn = document.getElementById('upscaleSelectedBtn'); // New Upscale Button
+    el.upscale768Btn = document.getElementById('upscale768Btn'); // New 768px Button
     el.trimHandleStart = document.getElementById('trimHandleStart'); // New
     el.trimHandleEnd = document.getElementById('trimHandleEnd'); // New
     el.scrubberWrapper = document.getElementById('scrubberWrapper'); // New
@@ -254,6 +257,8 @@ function initEvents() {
     });
 
     on(el.applyAiToSelectedBtn, 'click', reprocessSelectedFrames);
+    on(el.upscaleSelectedBtn, 'click', () => upscaleSelectedFrames(1152));
+    on(el.upscale768Btn, 'click', () => upscaleSelectedFrames(768));
 
     // Trim Handles Dragging
     setupDraggableHandle(el.trimHandleStart, 'start');
@@ -420,6 +425,7 @@ function selectFile(index) {
     if (!isSameFile) {
         state.trimStart = 0;
         state.trimEnd = 0;
+        state.userManuallyTrimmed = false;
     }
     updateTrimVisuals();
 
@@ -467,11 +473,17 @@ function moveFile(index, direction) {
 
 function onVideoLoaded() {
     state.videoDuration = el.sourceVideo.duration;
-    // Default implicit trim is full duration
-    if (state.trimEnd === 0) state.trimEnd = state.videoDuration;
+
+    // Explicitly default to full duration
+    state.trimStart = 0;
+    state.trimEnd = state.videoDuration;
 
     el.scrubberContainer.style.display = 'flex';
     el.sourceVideo.currentTime = 0;
+
+    // Force reset manual trim flag on new video load
+    state.userManuallyTrimmed = false;
+
     updateTimeDisplay();
     updateTrimVisuals();
 
@@ -479,13 +491,16 @@ function onVideoLoaded() {
     initTimelinePreviews();
 }
 
-function initTimelinePreviews() {
-    captureTimelineThumbnail('start', 0);
-    captureTimelineThumbnail('end', state.videoDuration);
+async function initTimelinePreviews() {
+    await captureTimelineThumbnail('start', 0);
+    // Slight delay to ensure UI updates or seek fully settles if needed
+    await new Promise(r => setTimeout(r, 50));
+    await captureTimelineThumbnail('end', state.videoDuration);
 }
 
 async function captureTimelineThumbnail(type, time) {
     if (!el.sourceVideo) return;
+    if (state.isProcessing) return; // Prevent hijacking video during extraction
 
     const source = el.sourceVideo;
     const canvas = type === 'start' ? el.previewStartFrame : el.previewEndFrame;
@@ -1043,14 +1058,29 @@ async function captureOne() {
 }
 
 async function captureAll() {
-    if (state.sourceFiles.length === 0 || state.isProcessing) return;
+    console.log('🎬 captureAll clicked');
+
+    if (state.sourceFiles.length === 0) {
+        console.warn('⚠️ captureAll: No source files');
+        alert('No hay archivos cargados para procesar.');
+        return;
+    }
+
+    if (state.isProcessing) {
+        console.warn('⚠️ captureAll: Already processing');
+        alert('Ya se está procesando una tarea. Espera a que termine.');
+        return;
+    }
 
     state.isProcessing = true;
     state.isBgRemovalCanceled = false; // Reset cancellation flag
     el.progressContainer.style.display = 'flex';
     el.captureAllBtn.disabled = true;
 
+    let totalExtractedAny = 0;
+
     try {
+        console.log(`🚀 Starting capture of ${state.sourceFiles.length} files...`);
         for (let fIndex = 0; fIndex < state.sourceFiles.length; fIndex++) {
             if (state.isBgRemovalCanceled) break;
 
@@ -1072,9 +1102,13 @@ async function captureAll() {
                 let startT = 0;
                 let endT = video.duration;
 
-                if (fIndex === state.currentFileIndex) {
+                if (fIndex === state.currentFileIndex && state.userManuallyTrimmed) {
                     startT = state.trimStart;
                     endT = state.trimEnd > 0 ? state.trimEnd : video.duration;
+                } else {
+                    // Force full duration if not manual trim or processing batch files (defaults)
+                    startT = 0;
+                    endT = video.duration;
                 }
 
                 // Safety checks
@@ -1120,6 +1154,7 @@ async function captureAll() {
                         original: tempCanvas, // Store original
                         selected: true
                     });
+                    totalExtractedAny++;
 
                     const pct = ((i + 1) / totalFrames) * 100;
                     el.progressFill.style.width = pct + '%';
@@ -1145,10 +1180,18 @@ async function captureAll() {
                     original: tempCanvas, // Store original
                     selected: true
                 });
+                totalExtractedAny++;
             }
 
             URL.revokeObjectURL(url);
         }
+
+        if (totalExtractedAny === 0) {
+            alert('No se extrajeron frames. Verifica la duración y los FPS.');
+        } else {
+            console.log(`✅ Extracted ${totalExtractedAny} frames total.`);
+        }
+
     } catch (e) {
         console.error("Error in captureAll:", e);
         alert("Ocurrió un error al extraer frames: " + e.message);
@@ -1259,6 +1302,14 @@ function updateCounts() {
     if (el.applyAiToSelectedBtn) {
         el.applyAiToSelectedBtn.style.display = (hasSelected && state.useAI) ? 'flex' : 'none';
     }
+
+    // Show Upscale buttons if we have selected frames
+    if (el.upscaleSelectedBtn) {
+        el.upscaleSelectedBtn.style.display = hasSelected ? 'flex' : 'none';
+    }
+    if (el.upscale768Btn) {
+        el.upscale768Btn.style.display = hasSelected ? 'flex' : 'none';
+    }
 }
 
 async function reprocessSelectedFrames() {
@@ -1306,9 +1357,138 @@ async function reprocessSelectedFrames() {
     } finally {
         state.isProcessing = false;
         el.progressContainer.style.display = 'none';
+        el.progressContainer.style.display = 'none';
         el.applyAiToSelectedBtn.disabled = false;
     }
 }
+
+// ===== Upscale Logic =====
+async function upscaleSelectedFrames(targetHeight = 1152) {
+    const selected = state.frames.filter(f => f.selected);
+    if (selected.length === 0) return;
+
+    state.isProcessing = true;
+    state.isBgRemovalCanceled = false;
+    el.progressContainer.style.display = 'flex';
+
+    // Disable both buttons
+    if (el.upscaleSelectedBtn) el.upscaleSelectedBtn.disabled = true;
+    if (el.upscale768Btn) el.upscale768Btn.disabled = true;
+
+    try {
+        for (let i = 0; i < selected.length; i++) {
+            if (state.isBgRemovalCanceled) break;
+
+            const frame = selected[i];
+
+            // Use current canvas as source (so we can upscale already processed/pixelated/bg-removed images)
+            // Or should we use original? 
+            // Usually upscaler is applied at the END to get high res output,
+            // OR at the beginning to get better details before pixelation?
+            // "Real-ESRGAN" suggests high quality output. 
+            // If we upscale the pixel art, it might look blurrier or weird if not pixel-art optimized.
+            // But Real-ESRGAN x4plus is for photos/anime.
+            // If the user wants to upscale the *video frame* to get better detail *before* pixelation, we should use original.
+            // If they want to upscale the *result*, we use canvas.
+            // Given "Video to Pixel Art", maybe they want to make the pixel art bigger?
+            // "Video to Pixel Art" usually implies low res.
+            // BeRefNet is for BG removal.
+            // Upscaler is likely to improve input quality OR to output high-res assets.
+            // Let's assume we upscale the CURRENT state of the frame (what looks like pixel art or the cropped frame).
+
+            // However, Real-ESRGAN on pixel art might ruin the hard edges.
+            // But if it's "pixel art materials" context...
+            // Let's try upscaling the *source image* (original) if available, 
+            // OR the current canvas if we want to upscale the result.
+
+            // Actually, if we upscale the pixelated image, it will look like smooth blobs.
+            // IF we upscale the original, we get a huge image, which then PixelIt will downscale again if BlockSize is set.
+            // UNLESS block size is large (low pixelation).
+
+            // Let's treat this as "Upscale the current visual result".
+
+            // Start with forceful AI for 2k, but conditional for 768px
+            let useAi = true;
+            if (targetHeight === 768) {
+                // Only use AI if the source is smaller than target
+                if (frame.canvas.height < targetHeight) {
+                    useAi = true;
+                } else {
+                    useAi = false;
+                }
+            }
+
+            const modeText = useAi ? "Upscaling (AI)" : "Resizing";
+            el.progressText.textContent = `${modeText} → Height ${targetHeight} (${i + 1}/${selected.length})...`;
+            el.progressFill.style.width = ((i + 1) / selected.length * 100) + '%';
+
+            // Convert canvas to blob
+            const blob = await new Promise(resolve => frame.canvas.toBlob(resolve, 'image/png'));
+
+            const upscaledBlob = await apiUpscaleImage(blob, targetHeight, useAi);
+
+            // Load result
+            const upscaledImg = await createImageBitmap(upscaledBlob);
+
+            // Update frame canvas size and draw
+            frame.canvas.width = upscaledImg.width;
+            frame.canvas.height = upscaledImg.height;
+            frame.canvas.getContext('2d').drawImage(upscaledImg, 0, 0);
+
+            // Note: We are replacing the canvas content with the upscaled version.
+            // If they modify block size later, `processFrame` might run again.
+            // `processFrame` uses `frame.original` if we re-trigger it from UI?
+            // Wait, `processFrame` takes `sourceCanvas` argument.
+            // The pipeline is: Source -> [Resize for AI] -> [AI BG Removal] -> [PixelIt] -> Result.
+            // If we upscale the Result, we are just changing the Frame Canvas.
+            // If they touch BlockSize, it might regenerate from Original (low res) and overwrite Upscale.
+            // This is acceptable behavior for a "post-processing" tool button.
+            // To make it persistent, we would need to update `frame.original`, but that would make EVERYTHING huge.
+            // Let's just update the canvas for now.
+        }
+
+        updateFrameStrip();
+
+    } catch (e) {
+        console.error(e);
+        alert('Error upscaling: ' + e.message);
+    } finally {
+        state.isProcessing = false;
+        el.progressContainer.style.display = 'none';
+        if (el.upscaleSelectedBtn) el.upscaleSelectedBtn.disabled = false;
+        if (el.upscale768Btn) el.upscale768Btn.disabled = false;
+    }
+}
+
+async function apiUpscaleImage(imageBlob, targetHeight = 1152, useAi = true) {
+    const formData = new FormData();
+    formData.append('image', imageBlob);
+    formData.append('target_height', targetHeight);
+    formData.append('use_ai', useAi);
+
+    const controller = new AbortController();
+    // Long timeout for Upscaling
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s
+
+    try {
+        const response = await fetch('/upscale', {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            throw new Error(`Upscale Error: ${response.statusText}`);
+        }
+
+        return await response.blob();
+    } catch (e) {
+        clearTimeout(timeoutId);
+        throw e;
+    }
+}
+
 
 // ===== Animation =====
 function startAnimation() {
@@ -1732,7 +1912,9 @@ function setTrimStart() {
         state.trimEnd = end;
     }
 
+
     state.trimStart = current;
+    state.userManuallyTrimmed = true;
     updateTrimVisuals();
     captureTimelineThumbnail('start', current);
     console.log(`Trim Start set to: ${current.toFixed(2)}s`);
@@ -1749,6 +1931,7 @@ function setTrimEnd() {
     }
 
     state.trimEnd = current;
+    state.userManuallyTrimmed = true;
     updateTrimVisuals();
     captureTimelineThumbnail('end', current);
     console.log(`Trim End set to: ${current.toFixed(2)}s`);
@@ -1756,7 +1939,8 @@ function setTrimEnd() {
 
 function resetTrim() {
     state.trimStart = 0;
-    state.trimEnd = state.videoDuration || 0;
+    state.trimEnd = state.videoDuration; // Explicit full duration
+    state.userManuallyTrimmed = false;
     updateTrimVisuals();
     initTimelinePreviews(); // Resets thumbnails
 }
@@ -1797,6 +1981,7 @@ function setupDraggableHandle(handle, type) {
             // Prevent crossing
             state.trimStart = Math.min(newTime, currentEnd - 0.1);
             if (state.trimStart < 0) state.trimStart = 0;
+            state.userManuallyTrimmed = true;
 
             el.sourceVideo.currentTime = state.trimStart;
             drawFrame(); // Update main preview
@@ -1805,6 +1990,7 @@ function setupDraggableHandle(handle, type) {
             const currentStart = state.trimStart;
             state.trimEnd = Math.max(newTime, currentStart + 0.1);
             if (state.trimEnd > state.videoDuration) state.trimEnd = state.videoDuration;
+            state.userManuallyTrimmed = true;
 
             el.sourceVideo.currentTime = state.trimEnd;
             drawFrame(); // Update main preview
