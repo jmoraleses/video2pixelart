@@ -50,7 +50,8 @@ const state = {
     isBgRemovalCanceled: false, // Flag for cancellation
     trimStart: 0,
     trimEnd: 0, // 0 means full duration
-    userManuallyTrimmed: false // Track if user explicitly changed trim
+    userManuallyTrimmed: false, // Track if user explicitly changed trim
+    fileMeta: [] // Parallel array to sourceFiles: { trimStart, trimEnd, userManuallyTrimmed }
 };
 
 // ===== Elements =====
@@ -343,6 +344,15 @@ function handleFiles(files) {
         }
 
         state.sourceFiles.push(...newFiles);
+        // Initialize meta for new files
+        newFiles.forEach(() => {
+            state.fileMeta.push({
+                trimStart: 0,
+                trimEnd: 0,
+                userManuallyTrimmed: false
+            });
+        });
+
         renderFileList();
 
         if (state.currentFileIndex === -1 && state.sourceFiles.length > 0) {
@@ -442,6 +452,7 @@ function selectFile(index) {
 
 function removeFile(index) {
     state.sourceFiles.splice(index, 1);
+    state.fileMeta.splice(index, 1);
 
     if (state.sourceFiles.length === 0) {
         resetApp();
@@ -465,6 +476,10 @@ function moveFile(index, direction) {
     state.sourceFiles[index] = state.sourceFiles[newIndex];
     state.sourceFiles[newIndex] = temp;
 
+    const tempMeta = state.fileMeta[index];
+    state.fileMeta[index] = state.fileMeta[newIndex];
+    state.fileMeta[newIndex] = tempMeta;
+
     if (state.currentFileIndex === index) state.currentFileIndex = newIndex;
     else if (state.currentFileIndex === newIndex) state.currentFileIndex = index;
 
@@ -474,9 +489,19 @@ function moveFile(index, direction) {
 function onVideoLoaded() {
     state.videoDuration = el.sourceVideo.duration;
 
-    // Explicitly default to full duration
-    state.trimStart = 0;
-    state.trimEnd = state.videoDuration;
+    // Load persisted trim settings if available
+    const meta = state.fileMeta[state.currentFileIndex];
+    if (meta && meta.trimStart !== undefined) {
+        state.trimStart = meta.trimStart;
+    } else {
+        state.trimStart = 0;
+    }
+
+    if (meta && meta.trimEnd !== undefined && meta.trimEnd > 0) {
+        state.trimEnd = meta.trimEnd;
+    } else {
+        state.trimEnd = state.videoDuration;
+    }
 
     el.scrubberContainer.style.display = 'flex';
     el.sourceVideo.currentTime = 0;
@@ -1113,9 +1138,19 @@ async function captureAll() {
                     // Ensure trimEnd is valid
                     endT = preservedTrimEnd > 0 ? preservedTrimEnd : video.duration;
                 } else {
-                    // Force full duration for other files
-                    startT = 0;
-                    endT = video.duration;
+                    // Check if specific trim settings exist for this file
+                    const meta = state.fileMeta[fIndex];
+                    if (meta && meta.trimStart !== undefined) {
+                        startT = meta.trimStart;
+                    } else {
+                        startT = 0;
+                    }
+
+                    if (meta && meta.trimEnd !== undefined && meta.trimEnd > 0) {
+                        endT = meta.trimEnd;
+                    } else {
+                        endT = video.duration;
+                    }
                 }
 
                 // Safety checks
@@ -1223,6 +1258,7 @@ function clearCaptures() {
 function resetApp() {
     state.frames = [];
     state.sourceFiles = [];
+    state.fileMeta = [];
     state.currentFileIndex = -1;
     state.sourceType = null;
     el.sourceVideo.src = '';
@@ -1922,6 +1958,12 @@ function setTrimStart() {
 
     state.trimStart = current;
     state.userManuallyTrimmed = true;
+
+    // Persist
+    if (state.currentFileIndex >= 0 && state.fileMeta[state.currentFileIndex]) {
+        state.fileMeta[state.currentFileIndex].trimStart = state.trimStart;
+    }
+
     updateTrimVisuals();
     captureTimelineThumbnail('start', current);
     console.log(`Trim Start set to: ${current.toFixed(2)}s`);
@@ -1939,6 +1981,12 @@ function setTrimEnd() {
 
     state.trimEnd = current;
     state.userManuallyTrimmed = true;
+
+    // Persist
+    if (state.currentFileIndex >= 0 && state.fileMeta[state.currentFileIndex]) {
+        state.fileMeta[state.currentFileIndex].trimEnd = state.trimEnd;
+    }
+
     updateTrimVisuals();
     captureTimelineThumbnail('end', current);
     console.log(`Trim End set to: ${current.toFixed(2)}s`);
@@ -1948,6 +1996,12 @@ function resetTrim() {
     state.trimStart = 0;
     state.trimEnd = state.videoDuration; // Explicit full duration
     state.userManuallyTrimmed = false;
+
+    // Persist reset
+    if (state.currentFileIndex >= 0 && state.fileMeta[state.currentFileIndex]) {
+        state.fileMeta[state.currentFileIndex].trimStart = 0;
+        state.fileMeta[state.currentFileIndex].trimEnd = state.videoDuration;
+    }
     updateTrimVisuals();
     initTimelinePreviews(); // Resets thumbnails
 }
@@ -1991,6 +2045,12 @@ function setupDraggableHandle(handle, type) {
             state.userManuallyTrimmed = true;
 
             el.sourceVideo.currentTime = state.trimStart;
+
+            // Persist
+            if (state.currentFileIndex >= 0 && state.fileMeta[state.currentFileIndex]) {
+                state.fileMeta[state.currentFileIndex].trimStart = state.trimStart;
+            }
+
             drawFrame(); // Update main preview
             captureTimelineThumbnail('start', state.trimStart);
         } else {
@@ -2000,6 +2060,12 @@ function setupDraggableHandle(handle, type) {
             state.userManuallyTrimmed = true;
 
             el.sourceVideo.currentTime = state.trimEnd;
+
+            // Persist
+            if (state.currentFileIndex >= 0 && state.fileMeta[state.currentFileIndex]) {
+                state.fileMeta[state.currentFileIndex].trimEnd = state.trimEnd;
+            }
+
             drawFrame(); // Update main preview
             captureTimelineThumbnail('end', state.trimEnd);
         }
